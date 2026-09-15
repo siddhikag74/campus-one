@@ -11,7 +11,7 @@
     "public": "node scripts/tunnel-supervisor.js",
     "dev:public": "node scripts/tunnel-supervisor.js",
     "build": "cd client && npm run build",
-    "vercel-build": "cd client && npm install && npm run build"
+    "vercel-build": "cd client && npm install --include=dev && npm run build"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
