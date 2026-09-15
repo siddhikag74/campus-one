@@ -44,14 +44,30 @@ const attachUserStates = async (events, userId) => {
   });
 };
 
+const INTEREST_KEYWORD_MAP = {
+  tech: ['tech', 'coding', 'hackathon', 'web dev', 'ai', 'robotics', 'software', 'acm', 'dsc', 'cyber', 'developer', 'algorithm', 'cloud', 'iot', 'programming', 'codeblitz', 'github', 'git'],
+  finance: ['finance', 'investment', 'trading', 'econtalk', 'case study', 'consulting', 'fintech', 'money', 'stock', 'economics', 'venture', 'product management', 'business'],
+  dance: ['dance', 'choreography', 'western', 'bhangra', 'hip hop', 'rhythm', 'step', 'ballroom', 'nataraja', 'she vibes', 'showcase'],
+  music: ['music', 'band', 'singing', 'concert', 'acoustic', 'vocals', 'instrumental', 'jam', 'taranum', 'sound', 'jamming', 'fest'],
+  sports: ['sports', 'football', 'cricket', 'basketball', 'athletics', 'tournament', 'badminton', 'futsal', 'synergy', 'fitness', 'marathon', 'league'],
+  creativity: ['creativity', 'art', 'design', 'media', 'content', 'writing', 'illustration', 'creative', 'visual', 'literary', 'tedx', 'ui/ux'],
+  fashion: ['fashion', 'styling', 'runway', 'vogue', 'glam', 'apparel', 'modelling', 'couture', 'tarangana', 'she vibes'],
+  photography: ['photography', 'photo', 'camera', 'videography', 'cinematography', 'lens', 'shutter', 'film', 'photowalk', 'exhibition'],
+  architecture: ['architecture', 'urban', 'drafting', 'model making', 'planning', 'structure', 'cad', 'spatial', 'design'],
+  gaming: ['gaming', 'esports', 'valorant', 'bgmi', 'fifa', 'lan', 'console', 'streamer', 'game', 'codeblitz', 'hackathon'],
+};
+
 // GET /api/events
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
     const { search, category, status } = req.query;
     const filter = {};
 
-    if (category && category.toLowerCase() !== 'all') {
-      filter.category = category;
+    const isStandardCategory = category && ['events', 'competitions', 'workshops', 'others'].includes(category.toLowerCase());
+    const isInterestCategory = category && !isStandardCategory && category.toLowerCase() !== 'all';
+
+    if (isStandardCategory) {
+      filter.category = new RegExp('^' + category + '$', 'i');
     }
 
     if (status && status.toLowerCase() !== 'all') {
@@ -59,10 +75,27 @@ router.get('/', authMiddleware, async (req, res, next) => {
     }
 
     let query = Event.find(filter).populate('club');
-
     let events = await query.exec();
 
-    // Client-side / regex search across event name, club name, venue, and category
+    // Filter by student interest keyword if interest-based category is requested
+    if (isInterestCategory) {
+      const interestKey = category.toLowerCase().trim();
+      const keywords = INTEREST_KEYWORD_MAP[interestKey] || [interestKey];
+
+      events = events.filter(e => {
+        const textToSearch = [
+          e.title || '',
+          e.about || '',
+          e.category || '',
+          e.club?.name || '',
+          ...(e.tags || []),
+        ].join(' ').toLowerCase();
+
+        return keywords.some(kw => textToSearch.includes(kw));
+      });
+    }
+
+    // Client-side / regex search across event name, club name, venue, category, and tags
     if (search && search.trim()) {
       const term = search.toLowerCase().trim();
       events = events.filter(e => {
@@ -70,7 +103,8 @@ router.get('/', authMiddleware, async (req, res, next) => {
         const clubMatch = e.club?.name?.toLowerCase().includes(term);
         const venueMatch = e.venue?.toLowerCase().includes(term);
         const categoryMatch = e.category?.toLowerCase().includes(term);
-        return titleMatch || clubMatch || venueMatch || categoryMatch;
+        const tagMatch = (e.tags || []).some(t => t.toLowerCase().includes(term));
+        return titleMatch || clubMatch || venueMatch || categoryMatch || tagMatch;
       });
     }
 

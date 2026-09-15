@@ -696,6 +696,65 @@ const seedAll = async () => {
         tags: ['Wellness', 'MentalHealth', 'Support'],
         popularityScore: 77,
       },
+
+      // 28. Campus Esports Championship — DSC
+      {
+        title: 'Campus Esports Championship',
+        club: clubMap['Developer Student Club (DSC)']?._id,
+        category: 'Competitions',
+        status: 'upcoming',
+        dateStr: 'Sep 27, 2026',
+        isoDate: '2026-09-27',
+        time: '11:00 AM - 07:00 PM',
+        venue: 'Computer Center Lab 4',
+        deadline: 'Sep 25, 2026, 11:59 PM',
+        isoDeadline: '2026-09-25',
+        teamSize: '4 - 5 Members',
+        isTeamEvent: true,
+        isPopular: true,
+        isCompetition: true,
+        about: 'The ultimate intra-university esports tournament featuring Valorant 5v5 tactical shooter and FIFA 24 console brackets.',
+        tags: ['Gaming', 'Esports', 'Valorant', 'FIFA', 'Tournaments', 'Console'],
+        popularityScore: 95,
+      },
+
+      // 29. Sustainable Architecture & Urban Design Colloquium — Green Sphere
+      {
+        title: 'Sustainable Architecture & Urban Space Colloquium',
+        club: clubMap['Green Sphere']?._id,
+        category: 'Workshops',
+        status: 'new',
+        dateStr: 'Sep 29, 2026',
+        isoDate: '2026-09-29',
+        time: '02:00 PM - 05:00 PM',
+        venue: 'Architecture Studio 2',
+        deadline: 'Sep 28, 2026, 06:00 PM',
+        isoDeadline: '2026-09-28',
+        teamSize: 'Individual or Pairs',
+        isPopular: false,
+        about: 'Hands-on architectural drafting, 3D spatial modeling, and passive solar design principles for modern zero-carbon college campuses.',
+        tags: ['Architecture', 'Design', 'UrbanPlanning', 'SpatialDesign', 'CAD', 'Drafting'],
+        popularityScore: 82,
+      },
+
+      // 30. Campus Runway & Fashion Styling Fest — Art Collective
+      {
+        title: 'Campus Runway & Fashion Styling Fest',
+        club: clubMap['Art Collective']?._id,
+        category: 'Events',
+        status: 'upcoming',
+        dateStr: 'Oct 02, 2026',
+        isoDate: '2026-10-02',
+        time: '06:00 PM - 09:30 PM',
+        venue: 'Open Air Amphitheatre',
+        deadline: 'Sep 30, 2026, 11:59 PM',
+        isoDeadline: '2026-09-30',
+        teamSize: 'Individual or Duo',
+        isPopular: true,
+        about: 'An avant-garde runway show celebrating sustainable thrift-fashion, apparel upcycling, creative cosmetics, and high-street styling.',
+        tags: ['Fashion', 'Styling', 'Runway', 'Apparel', 'Creativity', 'Modelling', 'Couture'],
+        popularityScore: 91,
+      },
     ];
 
     const eventMap = {};

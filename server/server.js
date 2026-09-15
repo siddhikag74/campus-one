@@ -87,10 +87,27 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Automatic initial database seeder for fresh cloud deployments (Vercel & Atlas)
+let isInitialSeedChecked = false;
+const ensureDatabaseSeeded = async () => {
+  if (isInitialSeedChecked) return;
+  try {
+    const eventCount = await Event.countDocuments();
+    if (eventCount === 0) {
+      console.log('[CampusOne] Fresh database detected. Running automatic initial seed...');
+      await seedAll();
+    }
+    isInitialSeedChecked = true;
+  } catch (err) {
+    console.warn('[CampusOne Auto-Seed Check]:', err.message);
+  }
+};
+
 // Ensure DB connection for every API request (reused via Mongoose connection cache)
 app.use(async (req, res, next) => {
   try {
     await connectDB();
+    await ensureDatabaseSeeded();
     next();
   } catch (err) {
     console.error('[Database Connection Error]:', err.message);
