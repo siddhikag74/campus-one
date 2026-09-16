@@ -8,6 +8,7 @@ const ImportantEvent = require('../models/ImportantEvent');
 const Review = require('../models/Review');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth');
+const { authorizeRoles } = require('../middleware/auth');
 const { sendWhatsAppNotification } = require('../integrations/meta/whatsapp');
 
 // Helper to attach user-specific states to an array of events
@@ -421,4 +422,150 @@ router.get('/:id/reviews', async (req, res, next) => {
   }
 });
 
+// ==========================================
+// ORGANIZER-ONLY ENDPOINTS (Strict RBAC)
+// ==========================================
+
+// POST /api/events
+// Create a new event (Organizer ONLY)
+router.post('/', authMiddleware, authorizeRoles('organizer', 'admin'), async (req, res, next) => {
+  try {
+    const {
+      title,
+      clubId,
+      category,
+      dateStr,
+      isoDate,
+      time,
+      venue,
+      deadline,
+      isoDeadline,
+      teamSize,
+      isTeamEvent,
+      about,
+      eligibility,
+      whatToExpect,
+      tags,
+    } = req.body;
+
+    if (!title || !category || !venue || !dateStr || !time || !about) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields: Title, Category, Venue, Date, Time, and About.',
+      });
+    }
+
+    // Resolve or fallback to organizer's club or default
+    let club = null;
+    if (clubId) {
+      club = await Club.findById(clubId);
+    }
+    if (!club) {
+      club = await Club.findOne({ name: /IEEE|Computer/i }) || await Club.findOne({});
+    }
+
+    const newEvent = await Event.create({
+      title: title.trim(),
+      club: club._id,
+      category: category || 'Events',
+      status: 'upcoming',
+      dateStr: dateStr.trim(),
+      isoDate: isoDate || new Date().toISOString().split('T')[0],
+      time: time.trim(),
+      venue: venue.trim(),
+      deadline: deadline || 'Day of Event',
+      isoDeadline: isoDeadline || isoDate || new Date().toISOString().split('T')[0],
+      teamSize: teamSize || (isTeamEvent ? '2 - 4 Members' : 'Individual'),
+      isTeamEvent: !!isTeamEvent,
+      about: about.trim(),
+      eligibility: eligibility || 'Open to all enrolled university students with valid ID.',
+      whatToExpect: Array.isArray(whatToExpect) ? whatToExpect : [whatToExpect || 'Hands-on practical session & networking'],
+      tags: Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()) : ['Tech', 'CampusOne']),
+      organizerUser: req.user._id,
+      resources: [],
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Event created successfully!',
+      event: newEvent,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/events/:id/resources
+// Add / post post-event resources (PDFs, PPTs, Docs, Images, Videos, Drive links, Forms, QR codes)
+// Strictly restricted to ORGANIZERS
+router.post('/:id/resources', authMiddleware, authorizeRoles('organizer', 'admin'), async (req, res, next) => {
+  try {
+    const { title, type, url, description } = req.body;
+
+    if (!title || !url) {
+      return res.status(400).json({
+        success: false,
+        message: 'Resource title and link/URL are required.',
+      });
+    }
+
+    const allowedTypes = ['pdf', 'ppt', 'doc', 'image', 'video', 'drive', 'form', 'link', 'qr'];
+    const resourceType = type && allowedTypes.includes(type.toLowerCase()) ? type.toLowerCase() : 'pdf';
+
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found.' });
+    }
+
+    const newResource = {
+      title: title.trim(),
+      type: resourceType,
+      url: url.trim(),
+      description: (description || '').trim(),
+      uploadedAt: new Date(),
+    };
+
+    event.resources = event.resources || [];
+    event.resources.push(newResource);
+    event.hasMedia = true;
+    await event.save();
+
+    return res.status(201).json({
+      success: true,
+      message: `Resource '${title}' published successfully!`,
+      resources: event.resources,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/events/:id/resources/:resourceId
+// Delete a resource from an event (Organizer ONLY)
+router.delete('/:id/resources/:resourceId', authMiddleware, authorizeRoles('organizer', 'admin'), async (req, res, next) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found.' });
+    }
+
+    event.resources = (event.resources || []).filter(
+      r => r._id.toString() !== req.params.resourceId
+    );
+    if (event.resources.length === 0) {
+      event.hasMedia = false;
+    }
+    await event.save();
+
+    return res.json({
+      success: true,
+      message: 'Resource deleted successfully.',
+      resources: event.resources,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
+

@@ -25,6 +25,10 @@ const sanitizeUser = (user) => {
     year: user.year,
     rollNumber: user.rollNumber,
     phone: user.phone,
+    role: user.role || 'student',
+    roleSelected: user.roleSelected !== undefined ? user.roleSelected : (user.onboardingCompleted || false),
+    organization: user.organization || '',
+    department: user.department || '',
     avatar: user.avatar || (user.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'CO'),
     interests: user.interests || [],
     interestSubCategories: user.interestSubCategories || [],
@@ -81,7 +85,7 @@ router.post('/register', async (req, res, next) => {
     // 5. Optionally link popular default clubs for new users
     const defaultClubs = await Club.find({}).limit(2).select('_id');
 
-    // 6. Create User (Onboarding incomplete by default for new signups)
+    // 6. Create User (Role selection is FALSE for new signups so they get prompted "Are you a Student, Organizer, or Professor?")
     const newUser = await User.create({
       name: name.trim(),
       email: normalizedEmail,
@@ -92,6 +96,10 @@ router.post('/register', async (req, res, next) => {
       rollNumber: (rollNumber || '').trim(),
       phone: (phone || '').trim(),
       avatar: initials,
+      role: 'student',
+      roleSelected: false,
+      organization: '',
+      department: '',
       interests: [],
       interestSubCategories: [],
       onboardingCompleted: false,
@@ -107,6 +115,50 @@ router.post('/register', async (req, res, next) => {
       message: 'Account created successfully! Welcome to CampusOne.',
       token,
       user: sanitizeUser(newUser),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/role
+// Set user role immediately after signup ("Are you a Student, Organizer, or Professor?")
+router.post('/role', authMiddleware, async (req, res, next) => {
+  try {
+    const { role, organization, department } = req.body;
+
+    const allowedRoles = ['student', 'organizer', 'professor'];
+    if (!role || !allowedRoles.includes(role.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role. Must be one of: Student, Organizer, Professor.',
+      });
+    }
+
+    const cleanRole = role.toLowerCase().trim();
+    const updateFields = {
+      role: cleanRole,
+      roleSelected: true,
+    };
+
+    if (organization) updateFields.organization = organization.trim();
+    if (department) updateFields.department = department.trim();
+
+    // If organizer or professor, set onboardingCompleted true since they do not need student interest tagging
+    if (cleanRole === 'organizer' || cleanRole === 'professor') {
+      updateFields.onboardingCompleted = true;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updateFields },
+      { new: true }
+    );
+
+    return res.json({
+      success: true,
+      message: `Role set to ${cleanRole.charAt(0).toUpperCase() + cleanRole.slice(1)} successfully!`,
+      user: sanitizeUser(updatedUser),
     });
   } catch (error) {
     next(error);
@@ -145,34 +197,57 @@ router.post('/login', async (req, res, next) => {
 });
 
 // POST /api/auth/demo-login
-// Fast login as demo student (Arjun Sharma) for judges, evaluators, and testing
+// Fast login as demo accounts: Student (Arjun Sharma), Organizer (IEEE DTU), or Professor (Dr. Sharma)
 router.post('/demo-login', async (req, res, next) => {
   try {
-    let user = await User.findOne({ email: 'arjun.sharma@dtu.ac.in' });
+    const roleReq = (req.body?.role || 'student').toLowerCase();
+    const hashedPassword = await bcrypt.hash('campusone123', 10);
+
+    let userEmail = 'arjun.sharma@dtu.ac.in';
+    let defaultName = 'Arjun Sharma';
+    let defaultRole = 'student';
+    let defaultOrg = '';
+    let defaultDept = 'Computer Science & Engineering';
+
+    if (roleReq === 'organizer') {
+      userEmail = 'organizer@dtu.ac.in';
+      defaultName = 'Rohan Gupta (Organizer)';
+      defaultRole = 'organizer';
+      defaultOrg = 'IEEE DTU Student Branch';
+    } else if (roleReq === 'professor') {
+      userEmail = 'professor@dtu.ac.in';
+      defaultName = 'Dr. Alok Sharma';
+      defaultRole = 'professor';
+      defaultDept = 'Department of Computer Science & Engineering';
+    }
+
+    let user = await User.findOne({ email: userEmail });
 
     if (!user) {
-      // Create Arjun Sharma if not yet seeded
-      const hashedPassword = await bcrypt.hash('campusone123', 10);
       user = await User.create({
-        name: 'Arjun Sharma',
-        email: 'arjun.sharma@dtu.ac.in',
-        rollNumber: '23BCS1042',
-        year: '3rd Year',
+        name: defaultName,
+        email: userEmail,
+        rollNumber: defaultRole === 'student' ? '23BCS1042' : 'FAC-8041',
+        year: defaultRole === 'student' ? '3rd Year' : 'Faculty',
         branch: 'Computer Science & Engineering',
         college: 'Delhi Technological University',
         phone: '+91 98765 43210',
-        avatar: 'AS',
+        avatar: defaultRole === 'professor' ? 'DS' : (defaultRole === 'organizer' ? 'RG' : 'AS'),
+        role: defaultRole,
+        roleSelected: true,
+        organization: defaultOrg,
+        department: defaultDept,
         interests: ['Tech', 'Gaming', 'Creativity'],
         interestSubCategories: ['Design', 'Media'],
         onboardingCompleted: true,
         password: hashedPassword,
       });
-    } else if (user.onboardingCompleted === undefined || user.onboardingCompleted === false) {
+    } else {
+      user.role = defaultRole;
+      user.roleSelected = true;
       user.onboardingCompleted = true;
-      if (!user.interests || user.interests.length === 0) {
-        user.interests = ['Tech', 'Gaming', 'Creativity'];
-        user.interestSubCategories = ['Design', 'Media'];
-      }
+      if (defaultOrg) user.organization = defaultOrg;
+      if (defaultDept) user.department = defaultDept;
       await user.save();
     }
 
@@ -180,7 +255,7 @@ router.post('/demo-login', async (req, res, next) => {
 
     return res.json({
       success: true,
-      message: 'Demo login successful as Arjun Sharma',
+      message: `Demo login successful as ${user.name} (${defaultRole.toUpperCase()})`,
       token,
       user: sanitizeUser(user),
     });
@@ -188,6 +263,7 @@ router.post('/demo-login', async (req, res, next) => {
     next(error);
   }
 });
+
 
 // POST /api/auth/onboarding
 // Save initial interest selections and mark onboarding as complete

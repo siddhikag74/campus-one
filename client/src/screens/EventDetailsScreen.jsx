@@ -314,56 +314,87 @@ export const EventDetailsScreen = ({
           />
         )}
 
-        {/* Post-Event Media Placeholders (Slides / QR Code) */}
-        {event.hasMedia && (
+        {/* Post-Event Media & Resources Section (Docs, PDFs, PPTs, Drive, Forms, QR, Media) */}
+        {((event.resources && event.resources.length > 0) || event.hasMedia) && (
           <div className="bg-surface rounded-2xl p-4 border border-slate-200/80 shadow-subtle space-y-3">
-            <h3 className="text-xs font-extrabold font-heading text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-extrabold font-heading text-slate-900 uppercase tracking-wider flex items-center justify-between">
               <span>Post-Event Media & Resources</span>
+              {event.resources?.length > 0 && (
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  {event.resources.length} Available
+                </span>
+              )}
             </h3>
 
-            {/* Slides Resource */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-              <div className="flex items-center gap-2.5 overflow-hidden">
-                <div className="p-2 rounded-lg bg-rose-100 text-rose-600 shrink-0">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div className="overflow-hidden">
-                  <span className="text-xs font-bold text-slate-800 block truncate">
-                    {event.slidesTitle || 'Session_Presentation_Deck.pdf'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">Official Slides & Handouts</span>
-                </div>
-              </div>
-              <button
-                onClick={() => alert('Viewing event presentation slides placeholder.')}
-                className="px-2.5 py-1 text-[11px] font-semibold text-primary bg-primary/10 rounded-lg hover:bg-primary/20 shrink-0"
-              >
-                View
-              </button>
-            </div>
+            {/* Dynamic Resources Attached by Organizer */}
+            {event.resources && event.resources.length > 0 && (
+              <div className="space-y-2">
+                {event.resources.map((res, idx) => {
+                  const typeIcons = {
+                    pdf: { icon: '📄', color: 'bg-red-50 text-red-700 border-red-200', label: 'PDF Document' },
+                    ppt: { icon: '📊', color: 'bg-orange-50 text-orange-700 border-orange-200', label: 'Presentation Deck' },
+                    doc: { icon: '📝', color: 'bg-blue-50 text-blue-700 border-blue-200', label: 'Document' },
+                    drive: { icon: '📁', color: 'bg-yellow-50 text-yellow-700 border-yellow-200', label: 'Google Drive' },
+                    form: { icon: '📋', color: 'bg-purple-50 text-purple-700 border-purple-200', label: 'Recruitment Form' },
+                    qr: { icon: '📱', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'QR Code' },
+                    video: { icon: '🎥', color: 'bg-rose-50 text-rose-700 border-rose-200', label: 'Video Recording' },
+                    image: { icon: '🖼️', color: 'bg-pink-50 text-pink-700 border-pink-200', label: 'Image Asset' },
+                    link: { icon: '🔗', color: 'bg-cyan-50 text-cyan-700 border-cyan-200', label: 'Resource Link' },
+                  };
+                  const meta = typeIcons[res.type] || typeIcons.pdf;
 
-            {/* QR Code Resource */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-              <div className="flex items-center gap-2.5 overflow-hidden">
-                <div className="p-2 rounded-lg bg-indigo-100 text-primary shrink-0">
-                  <QrCode className="w-4 h-4" />
-                </div>
-                <div className="overflow-hidden">
-                  <span className="text-xs font-bold text-slate-800 block truncate">
-                    {event.qrCodeLabel || 'Digital Certificate Verification'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">Scan for Azure Sandbox Certificates</span>
-                </div>
+                  return (
+                    <div key={res._id || idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/70 hover:border-primary/40 transition-colors">
+                      <div className="flex items-center gap-2.5 overflow-hidden">
+                        <div className={`p-2 rounded-lg text-base shrink-0 border ${meta.color}`}>
+                          {meta.icon}
+                        </div>
+                        <div className="overflow-hidden">
+                          <span className="text-xs font-bold text-slate-800 block truncate">
+                            {res.title}
+                          </span>
+                          <span className="text-[10px] text-slate-500 block truncate">
+                            {res.description || meta.label}
+                          </span>
+                        </div>
+                      </div>
+                      <a
+                        href={res.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 text-[11px] font-bold text-primary bg-primary/10 rounded-lg hover:bg-primary/20 shrink-0 flex items-center gap-1"
+                      >
+                        <span>Open</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  );
+                })}
               </div>
-              <button
-                onClick={() => alert('Displaying digital attendee certificate QR code.')}
-                className="px-2.5 py-1 text-[11px] font-semibold text-primary bg-primary/10 rounded-lg hover:bg-primary/20 shrink-0"
-              >
-                Show QR
-              </button>
-            </div>
+            )}
+
+            {/* Default Slides Placeholder */}
+            {(!event.resources || event.resources.length === 0) && event.hasMedia && (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/70">
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <div className="p-2 rounded-lg bg-rose-100 text-rose-600 shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <span className="text-xs font-bold text-slate-800 block truncate">
+                      {event.slidesTitle || 'Session_Presentation_Deck.pdf'}
+                    </span>
+                    <span className="text-[10px] text-slate-500">Official Slides & Handouts</span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 text-[11px] font-semibold text-primary bg-primary/10 rounded-lg">
+                  Available
+                </span>
+              </div>
+            )}
           </div>
         )}
+
 
         {/* Existing Reviews Section */}
         {event.reviews && event.reviews.length > 0 && (

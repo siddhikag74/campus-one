@@ -81,17 +81,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const demoLogin = async () => {
+  const demoLogin = async (role = 'student') => {
     try {
-      const res = await api.demoLogin();
+      const res = await api.demoLogin(role);
       if (res.user) {
         setUser(res.user);
-        showToast('Logged in as Demo Student Arjun Sharma 🚀', 'success');
+        const roleName = role.charAt(0).toUpperCase() + role.slice(1);
+        showToast(`Logged in as Demo ${roleName} (${res.user.name}) 🚀`, 'success');
         return { success: true, user: res.user };
       }
       return { success: false, message: 'Demo login failed' };
     } catch (err) {
       showToast(err.message || 'Demo login failed', 'error');
+      return { success: false, message: err.message };
+    }
+  };
+
+  const selectRole = async ({ role, organization, department }) => {
+    try {
+      const res = await api.selectRole({ role, organization, department });
+      if (res.user) {
+        setUser(res.user);
+        showToast(`Welcome! Configured as ${role.toUpperCase()}`, 'success');
+        return { success: true, user: res.user };
+      }
+      return { success: false, message: res.message || 'Failed to set role' };
+    } catch (err) {
+      showToast(err.message || 'Failed to set role', 'error');
       return { success: false, message: err.message };
     }
   };
@@ -140,6 +156,7 @@ export const AuthProvider = ({ children }) => {
         login,
         signup,
         demoLogin,
+        selectRole,
         logout,
         updateProfile,
         saveInterests,
@@ -149,6 +166,7 @@ export const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
+
 };
 
 export const useAuth = () => useContext(AuthContext);

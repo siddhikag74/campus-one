@@ -3,8 +3,10 @@ const router = express.Router();
 const TimetableEntry = require('../models/TimetableEntry');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth');
+const { authorizeRoles } = require('../middleware/auth');
 
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 
 // Helper to calculate current academic week metadata
 const getWeekMetadata = (weekOffset = 0) => {
@@ -437,12 +439,16 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
 });
 
 // PATCH /api/timetable/:id/change
-// Simulate / apply an administrative schedule change (Venue, Cancel, Postpone, Time)
-// Automatically updates database AND dispatches student notification
-router.patch('/:id/change', authMiddleware, async (req, res, next) => {
+// Strictly restricted to PROFESSORS and ADMINS
+// Applies Cancel, Postpone, Reschedule, Venue Change, and notifies students
+router.patch('/:id/change', authMiddleware, authorizeRoles('professor', 'admin'), async (req, res, next) => {
   try {
     const userId = req.user._id;
-    const entry = await TimetableEntry.findOne({ _id: req.params.id, user: userId });
+    // Allow professor to modify their own entry or any matching course entry
+    let entry = await TimetableEntry.findOne({ _id: req.params.id, user: userId });
+    if (!entry) {
+      entry = await TimetableEntry.findById(req.params.id);
+    }
 
     if (!entry) {
       return res.status(404).json({ success: false, message: 'Timetable entry not found' });
@@ -462,14 +468,14 @@ router.patch('/:id/change', authMiddleware, async (req, res, next) => {
 
       notificationType = 'venue_changed';
       notificationTitle = 'Classroom Moved 📍';
-      notificationBody = `Your ${entry.subject} class has moved from ${entry.originalVenue} to ${entry.venue}.`;
+      notificationBody = `Prof. ${req.user.name}: Your ${entry.subject} class has moved from ${entry.originalVenue} to ${entry.venue}.`;
     } else if (action === 'cancel') {
       entry.status = 'cancelled';
-      entry.changeReason = reason || 'Class cancelled due to departmental faculty conference.';
+      entry.changeReason = reason || 'Class cancelled due to departmental faculty symposium.';
 
       notificationType = 'class_cancelled';
       notificationTitle = 'Class Cancelled ❌';
-      notificationBody = `Your ${entry.subject} (${entry.courseCode}) class at ${entry.startTime} on ${entry.dayOfWeek} has been cancelled.`;
+      notificationBody = `Prof. ${req.user.name}: Your ${entry.subject} (${entry.courseCode}) class at ${entry.startTime} on ${entry.dayOfWeek} has been cancelled.`;
     } else if (action === 'postpone') {
       entry.originalDay = entry.originalDay || entry.dayOfWeek;
       entry.originalStartTime = entry.originalStartTime || entry.startTime;
@@ -482,7 +488,7 @@ router.patch('/:id/change', authMiddleware, async (req, res, next) => {
 
       notificationType = 'class_postponed';
       notificationTitle = 'Class Postponed ⏳';
-      notificationBody = `Your ${entry.subject} class has been postponed to ${entry.dayOfWeek} at ${entry.startTime}.`;
+      notificationBody = `Prof. ${req.user.name}: Your ${entry.subject} class has been postponed to ${entry.dayOfWeek} at ${entry.startTime}.`;
     } else if (action === 'time_change') {
       entry.originalStartTime = entry.originalStartTime || entry.startTime;
       entry.originalEndTime = entry.originalEndTime || entry.endTime;
@@ -493,7 +499,7 @@ router.patch('/:id/change', authMiddleware, async (req, res, next) => {
 
       notificationType = 'class_time_changed';
       notificationTitle = 'Class Time Changed ⏰';
-      notificationBody = `Your ${entry.subject} class time has changed from ${entry.originalStartTime} to ${entry.startTime}.`;
+      notificationBody = `Prof. ${req.user.name}: Your ${entry.subject} class time has changed from ${entry.originalStartTime} to ${entry.startTime}.`;
     } else if (action === 'reset') {
       entry.status = 'scheduled';
       if (entry.originalVenue) {
@@ -516,23 +522,53 @@ router.patch('/:id/change', authMiddleware, async (req, res, next) => {
 
       notificationType = 'timetable_change';
       notificationTitle = 'Schedule Restored 🔄';
-      notificationBody = `Your ${entry.subject} class has been restored to regular schedule (${entry.startTime}, ${entry.venue}).`;
+      notificationBody = `Prof. ${req.user.name}: Your ${entry.subject} class has been restored to regular schedule (${entry.startTime}, ${entry.venue}).`;
     } else {
       return res.status(400).json({ success: false, message: 'Invalid schedule change action' });
     }
 
     await entry.save();
 
-    // Create student notification in database
-    const notification = await Notification.create({
-      user: userId,
+    // Propagate same change to other student timetable entries of the same courseCode
+    const affectedEntries = await TimetableEntry.find({ courseCode: entry.courseCode });
+    await TimetableEntry.updateMany(
+      { courseCode: entry.courseCode, _id: { $ne: entry._id } },
+      {
+        $set: {
+          status: entry.status,
+          venue: entry.venue,
+          dayOfWeek: entry.dayOfWeek,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          changeReason: entry.changeReason,
+          originalVenue: entry.originalVenue,
+          originalStartTime: entry.originalStartTime,
+          originalEndTime: entry.originalEndTime,
+          originalDay: entry.originalDay,
+        }
+      }
+    );
+
+    // Collect all affected student user IDs and professor
+    const targetUserIds = new Set();
+    targetUserIds.add(userId.toString());
+    affectedEntries.forEach(ae => {
+      if (ae.user) targetUserIds.add(ae.user.toString());
+    });
+
+    const notificationsToInsert = Array.from(targetUserIds).map(uid => ({
+      user: uid,
       type: notificationType,
       title: notificationTitle,
       body: notificationBody,
       timetableEntry: entry._id,
       isRead: false,
       timeAgo: 'Just now',
-    });
+    }));
+
+    const insertedNotifications = await Notification.insertMany(notificationsToInsert);
+    const notification = insertedNotifications[0];
+
 
     return res.json({
       success: true,
@@ -563,3 +599,4 @@ router.post('/reset-demo', authMiddleware, async (req, res, next) => {
 });
 
 module.exports = router;
+

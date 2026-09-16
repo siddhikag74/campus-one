@@ -119,8 +119,40 @@ const EventSchema = new mongoose.Schema({
     type: Number,
     default: 50,
   },
+  organizerUser: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  resources: [{
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    type: {
+      type: String,
+      enum: ['pdf', 'ppt', 'doc', 'image', 'video', 'drive', 'form', 'link', 'qr'],
+      required: true,
+      default: 'pdf',
+    },
+    url: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
 }, {
   timestamps: true,
 });
 
 module.exports = mongoose.model('Event', EventSchema);
+

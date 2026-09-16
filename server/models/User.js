@@ -68,6 +68,25 @@ const UserSchema = new mongoose.Schema({
     type: String,
     trim: true,
   }],
+  role: {
+    type: String,
+    enum: ['student', 'organizer', 'professor'],
+    default: 'student',
+  },
+  roleSelected: {
+    type: Boolean,
+    default: false,
+  },
+  organization: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  department: {
+    type: String,
+    default: '',
+    trim: true,
+  },
   onboardingCompleted: {
     type: Boolean,
     default: false,
@@ -77,3 +96,4 @@ const UserSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('User', UserSchema);
+

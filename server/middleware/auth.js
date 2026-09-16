@@ -41,4 +41,28 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+const authorizeRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required before accessing this role-restricted resource.',
+      });
+    }
+
+    const userRole = req.user.role || 'student';
+    if (!roles.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. This action requires ${roles.join(' or ')} permissions, but your account is registered as '${userRole}'.`,
+      });
+    }
+
+    next();
+  };
+};
+
 module.exports = authMiddleware;
+module.exports.authMiddleware = authMiddleware;
+module.exports.authorizeRoles = authorizeRoles;
+

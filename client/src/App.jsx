@@ -8,9 +8,14 @@ import AppShell from './components/layout/AppShell';
 import LoginScreen from './screens/auth/LoginScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
 import ForgotPasswordScreen from './screens/auth/ForgotPasswordScreen';
+import RoleSelectionScreen from './screens/auth/RoleSelectionScreen';
 import InterestSelectionScreen from './screens/auth/InterestSelectionScreen';
 
-// Main Screens
+// Role-Specific Dashboards
+import OrganizerDashboardScreen from './screens/organizer/OrganizerDashboardScreen';
+import ProfessorScheduleScreen from './screens/professor/ProfessorScheduleScreen';
+
+// Main Screens (Student Mode)
 import HomeScreen from './screens/HomeScreen';
 import ExploreScreen from './screens/ExploreScreen';
 import TimetableScreen from './screens/TimetableScreen';
@@ -25,6 +30,7 @@ import ReviewScreen from './screens/ReviewScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 
 export const MainApp = () => {
+  const { user } = useAuth();
   // Main tabs: 'home' | 'explore' | 'timetable' | 'calendar' | 'profile'
   const [activeTab, setActiveTab] = useState('home');
   const [highlightedClassId, setHighlightedClassId] = useState(null);
@@ -69,66 +75,77 @@ export const MainApp = () => {
   // Sub-screens such as Event Details, Registration, Club Details, Review, and Notifications HIDE the bottom navigation
   const showBottomNav = !subscreen;
 
-  const renderContent = () => {
-    if (subscreen) {
-      switch (subscreen.type) {
-        case 'event-details':
-          return (
-            <EventDetailsScreen
-              eventId={subscreen.eventId}
-              onBack={handleCloseSubscreen}
-              onNavigateToRegister={handleOpenRegister}
-              onNavigateToReview={handleOpenReview}
-              onNavigateToClub={handleOpenClub}
-            />
-          );
+  // Render Subscreen if active
+  if (subscreen) {
+    switch (subscreen.type) {
+      case 'event-details':
+        return (
+          <EventDetailsScreen
+            eventId={subscreen.eventId}
+            onBack={handleCloseSubscreen}
+            onNavigateToRegister={handleOpenRegister}
+            onNavigateToReview={handleOpenReview}
+            onNavigateToClub={handleOpenClub}
+          />
+        );
 
-        case 'register':
-          return (
-            <RegistrationScreen
-              eventId={subscreen.eventId}
-              onBack={() => handleBackToEvent(subscreen.eventId)}
-              onComplete={() => handleBackToEvent(subscreen.eventId)}
-            />
-          );
+      case 'register':
+        return (
+          <RegistrationScreen
+            eventId={subscreen.eventId}
+            onBack={() => handleBackToEvent(subscreen.eventId)}
+            onComplete={() => handleBackToEvent(subscreen.eventId)}
+          />
+        );
 
-        case 'review':
-          return (
-            <ReviewScreen
-              eventId={subscreen.eventId}
-              onBack={() => handleBackToEvent(subscreen.eventId)}
-              onComplete={() => handleBackToEvent(subscreen.eventId)}
-            />
-          );
+      case 'review':
+        return (
+          <ReviewScreen
+            eventId={subscreen.eventId}
+            onBack={() => handleBackToEvent(subscreen.eventId)}
+            onComplete={() => handleBackToEvent(subscreen.eventId)}
+          />
+        );
 
-        case 'club-details':
-          return (
-            <ClubDetailsScreen
-              clubId={subscreen.clubId}
-              onBack={handleCloseSubscreen}
-              onNavigateToEvent={handleOpenEvent}
-            />
-          );
+      case 'club-details':
+        return (
+          <ClubDetailsScreen
+            clubId={subscreen.clubId}
+            onBack={handleCloseSubscreen}
+            onNavigateToEvent={handleOpenEvent}
+          />
+        );
 
-        case 'notifications':
-          return (
-            <NotificationsScreen
-              onBack={handleCloseSubscreen}
-              onNavigateToEvent={handleOpenEvent}
-              onNavigateToTimetable={(classId) => {
-                setSubscreen(null);
-                setHighlightedClassId(classId);
-                setActiveTab('timetable');
-              }}
-            />
-          );
+      case 'notifications':
+        return (
+          <NotificationsScreen
+            onBack={handleCloseSubscreen}
+            onNavigateToEvent={handleOpenEvent}
+            onNavigateToTimetable={(classId) => {
+              setSubscreen(null);
+              setHighlightedClassId(classId);
+              setActiveTab('timetable');
+            }}
+          />
+        );
 
-        default:
-          break;
-      }
+      default:
+        break;
     }
+  }
 
-    // Default Main Navigation Tabs
+  // ROLE 2: ORGANIZER DASHBOARD
+  if (user?.role === 'organizer') {
+    return <OrganizerDashboardScreen onOpenEvent={handleOpenEvent} />;
+  }
+
+  // ROLE 3: PROFESSOR SCHEDULE VIEW
+  if (user?.role === 'professor') {
+    return <ProfessorScheduleScreen />;
+  }
+
+  // ROLE 1: STUDENT (Default & Existing flow)
+  const renderStudentContent = () => {
     switch (activeTab) {
       case 'home':
         return (
@@ -184,7 +201,7 @@ export const MainApp = () => {
       showBottomNav={showBottomNav}
       currentScreen={subscreen ? subscreen.type : activeTab}
     >
-      {renderContent()}
+      {renderStudentContent()}
     </AppShell>
   );
 };
@@ -229,12 +246,17 @@ const AppRoot = () => {
     }
   }
 
-  // Onboarding flow: show Interest Selection only if user has not completed onboarding
-  if (!user?.onboardingCompleted) {
+  // ONBOARDING STEP 1: If role is not yet selected, ask: "Are you a Student, Organizer, or Professor?"
+  if (!user?.roleSelected) {
+    return <RoleSelectionScreen />;
+  }
+
+  // ONBOARDING STEP 2 (STUDENT ONLY): Show Select Interests screen if student has not completed interest onboarding
+  if (user?.role === 'student' && !user?.onboardingCompleted) {
     return <InterestSelectionScreen />;
   }
 
-  // Authenticated state: render main application
+  // Authenticated state: render role-tailored dashboard (Student, Organizer, or Professor)
   return <MainApp />;
 };
 
@@ -251,3 +273,4 @@ export const App = () => {
 };
 
 export default App;
+

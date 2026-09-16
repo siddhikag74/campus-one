@@ -29,11 +29,11 @@ export const LoginScreen = ({ onNavigateToSignUp, onNavigateToForgotPassword }) 
     }
   };
 
-  const handleDemoLogin = async () => {
+  const handleDemoLogin = async (role = 'student') => {
     setError('');
-    setDemoLoading(true);
-    await demoLogin();
-    setDemoLoading(false);
+    setDemoLoading(role);
+    await demoLogin(role);
+    setDemoLoading(null);
   };
 
   return (
@@ -136,7 +136,7 @@ export const LoginScreen = ({ onNavigateToSignUp, onNavigateToForgotPassword }) 
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading || demoLoading}
+              disabled={loading || !!demoLoading}
               className="w-full py-3 bg-primary hover:bg-primary-hover text-white text-sm font-bold font-heading rounded-xl shadow-md shadow-primary/25 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 touch-scale cursor-pointer"
             >
               {loading ? (
@@ -157,40 +157,89 @@ export const LoginScreen = ({ onNavigateToSignUp, onNavigateToForgotPassword }) 
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-surface px-2.5 text-slate-400 font-bold tracking-wider">
-                Quick Evaluator Access
+                Quick Evaluator Access (3 Roles)
               </span>
             </div>
           </div>
 
-          {/* 1-Click Demo Login Button */}
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            disabled={loading || demoLoading}
-            className="w-full py-2.5 px-4 bg-gradient-to-r from-violet-50 to-indigo-50 border border-primary/20 hover:border-primary/40 rounded-xl text-xs font-bold text-primary flex items-center justify-between transition-all hover:shadow-sm touch-scale cursor-pointer group"
-          >
-            <div className="flex items-center gap-2 text-left">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-black font-heading text-xs shrink-0">
-                AS
-              </div>
-              <div>
-                <div className="font-extrabold text-slate-900 group-hover:text-primary transition-colors flex items-center gap-1.5">
-                  1-Click Demo Login
-                  <span className="text-[9px] bg-primary/15 text-primary px-1.5 py-0.2 rounded font-mono font-bold">
-                    Arjun Sharma
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-500 font-normal">
-                  Pre-populated events, registrations & bookmarks
+          {/* 3-Role Demo Buttons */}
+          <div className="grid grid-cols-1 gap-2">
+            {/* Student Demo */}
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('student')}
+              disabled={loading || !!demoLoading}
+              className="w-full py-2 px-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 hover:border-blue-400 rounded-xl text-xs font-bold text-blue-700 flex items-center justify-between transition-all hover:shadow-sm touch-scale cursor-pointer text-left"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">🎓</span>
+                <div>
+                  <div className="font-extrabold text-slate-900 text-xs">
+                    Demo Student <span className="text-[10px] font-mono text-blue-600 font-normal">(Arjun Sharma)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-normal">
+                    Student Feed, Registered Events & Schedule
+                  </div>
                 </div>
               </div>
-            </div>
-            {demoLoading ? (
-              <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4 text-primary shrink-0" />
-            )}
-          </button>
+              {demoLoading === 'student' ? (
+                <div className="w-4 h-4 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+              ) : (
+                <span className="text-[10px] font-bold bg-blue-600/10 text-blue-600 px-2 py-0.5 rounded-md">Try Student</span>
+              )}
+            </button>
+
+            {/* Organizer Demo */}
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('organizer')}
+              disabled={loading || !!demoLoading}
+              className="w-full py-2 px-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 hover:border-amber-400 rounded-xl text-xs font-bold text-amber-700 flex items-center justify-between transition-all hover:shadow-sm touch-scale cursor-pointer text-left"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">📢</span>
+                <div>
+                  <div className="font-extrabold text-slate-900 text-xs">
+                    Demo Organizer <span className="text-[10px] font-mono text-amber-600 font-normal">(IEEE DTU)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-normal">
+                    Create Events & Upload Docs/PPTs/Drive/QR
+                  </div>
+                </div>
+              </div>
+              {demoLoading === 'organizer' ? (
+                <div className="w-4 h-4 border-2 border-amber-600/30 border-t-amber-600 rounded-full animate-spin" />
+              ) : (
+                <span className="text-[10px] font-bold bg-amber-600/10 text-amber-600 px-2 py-0.5 rounded-md">Try Organizer</span>
+              )}
+            </button>
+
+            {/* Professor Demo */}
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('professor')}
+              disabled={loading || !!demoLoading}
+              className="w-full py-2 px-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 hover:border-emerald-400 rounded-xl text-xs font-bold text-emerald-700 flex items-center justify-between transition-all hover:shadow-sm touch-scale cursor-pointer text-left"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">🏛️</span>
+                <div>
+                  <div className="font-extrabold text-slate-900 text-xs">
+                    Demo Professor <span className="text-[10px] font-mono text-emerald-600 font-normal">(Dr. Sharma)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-normal">
+                    Timetable View, Cancel & Postpone Classes
+                  </div>
+                </div>
+              </div>
+              {demoLoading === 'professor' ? (
+                <div className="w-4 h-4 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin" />
+              ) : (
+                <span className="text-[10px] font-bold bg-emerald-600/10 text-emerald-600 px-2 py-0.5 rounded-md">Try Professor</span>
+              )}
+            </button>
+          </div>
+
 
           {/* Sign Up Link */}
           <div className="text-center pt-2">

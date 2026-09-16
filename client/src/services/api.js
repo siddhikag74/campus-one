@@ -58,16 +58,26 @@ export const api = {
     return data;
   },
 
-  demoLogin: async () => {
+  demoLogin: async (role = 'student') => {
     const res = await fetch(`${API_BASE}/auth/demo-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
     });
     const data = await handleResponse(res);
     if (data.token) {
       localStorage.setItem('campusone_token', data.token);
     }
     return data;
+  },
+
+  selectRole: async ({ role, organization, department }) => {
+    const res = await fetch(`${API_BASE}/auth/role`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ role, organization, department }),
+    });
+    return handleResponse(res);
   },
 
   logout: async () => {
@@ -116,6 +126,34 @@ export const api = {
     });
     return handleResponse(res);
   },
+
+  // Events (Organizer & Student)
+  createEvent: async (payload) => {
+    const res = await fetch(`${API_BASE}/events`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  addEventResource: async (eventId, payload) => {
+    const res = await fetch(`${API_BASE}/events/${eventId}/resources`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  deleteEventResource: async (eventId, resourceId) => {
+    const res = await fetch(`${API_BASE}/events/${eventId}/resources/${resourceId}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
 
   // Events
   getEvents: async (params = {}) => {
