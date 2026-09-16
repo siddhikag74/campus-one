@@ -14,6 +14,11 @@ import {
   CheckCircle2,
   ExternalLink,
   ChevronRight,
+  MessageSquare,
+  Award,
+  Sparkles,
+  Lightbulb,
+  Edit3,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAppData } from '../context/AppDataContext';
@@ -22,6 +27,8 @@ import RoundCard from '../components/events/RoundCard';
 import AlertBanner from '../components/common/AlertBanner';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import ErrorState from '../components/common/ErrorState';
+import RatingStars from '../components/common/RatingStars';
+import EventReviewModal from '../components/events/EventReviewModal';
 
 export const EventDetailsScreen = ({
   eventId,
@@ -33,6 +40,7 @@ export const EventDetailsScreen = ({
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   const {
     savedEventIds,
@@ -54,6 +62,27 @@ export const EventDetailsScreen = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReviewSubmitted = (updatedReview, stats) => {
+    setEvent((prev) => {
+      if (!prev) return prev;
+      const prevReviews = prev.reviews || [];
+      const filtered = prevReviews.filter(
+        (r) => r._id?.toString() !== updatedReview._id?.toString() &&
+               r.user?._id?.toString() !== updatedReview.user?._id?.toString()
+      );
+      const newReviews = [updatedReview, ...filtered];
+      return {
+        ...prev,
+        reviews: newReviews,
+        userReview: updatedReview,
+        averageRating: stats?.averageRating || updatedReview.averageRating || prev.averageRating,
+        reviewCount: stats?.reviewCount || newReviews.length,
+        categoryAverages: stats?.categoryAverages || prev.categoryAverages,
+        ratingBreakdown: stats?.ratingBreakdown || prev.ratingBreakdown,
+      };
+    });
   };
 
   useEffect(() => {
@@ -396,70 +425,236 @@ export const EventDetailsScreen = ({
         )}
 
 
-        {/* Existing Reviews Section */}
-        {event.reviews && event.reviews.length > 0 && (
-          <div className="bg-surface rounded-2xl p-4 border border-slate-200/80 shadow-subtle space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-extrabold font-heading text-slate-900 uppercase tracking-wider">
-                Student Reviews ({event.reviews.length})
+        {/* Comprehensive Student Reviews & Ratings Section */}
+        <div id="event-reviews-section" className="bg-surface rounded-2xl p-4 border border-slate-200/80 shadow-subtle space-y-4">
+          {/* Section Header with Overall Rating Badge */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-xs font-extrabold font-heading text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                <span>Student Reviews ({event.reviews?.length || 0})</span>
               </h3>
-              {event.averageRating && (
-                <div className="flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/80">
-                  <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                  <span>{event.averageRating} / 5</span>
-                </div>
-              )}
+              <p className="text-[10px] text-slate-400">
+                Verified feedback from campus attendees
+              </p>
             </div>
 
-            <div className="space-y-2.5 pt-1">
-              {event.reviews.map((r) => (
-                <div key={r._id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 text-xs">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-primary/20 text-primary font-bold text-[10px] flex items-center justify-center">
-                        {r.user?.name ? r.user.name.charAt(0) : 'S'}
-                      </div>
-                      <span className="font-bold text-slate-900">{r.user?.name || 'Verified Student'}</span>
-                    </div>
-                    <div className="flex items-center gap-0.5">
-                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      <span className="text-[11px] font-bold text-slate-700">{r.ratings?.overall}</span>
-                    </div>
-                  </div>
-                  {r.comment && (
-                    <p className="text-slate-600 text-[11px] leading-relaxed italic">
-                      "{r.comment}"
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
+            {event.averageRating ? (
+              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-xl">
+                <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+                <span className="text-xs font-black text-amber-900">
+                  {event.averageRating}
+                </span>
+                <span className="text-[10px] text-amber-700 font-bold">/ 5</span>
+              </div>
+            ) : (
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                New Event
+              </span>
+            )}
           </div>
-        )}
 
-        {/* Review Rule Requirement:
-            "Write a Review" must ONLY appear when:
-            event.status === "missed"
-            It must NOT appear for: new, upcoming, deadline approaching!
-        */}
-        {isMissed && (
-          <div className="p-4 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-2xl border border-indigo-200/80 shadow-subtle text-center space-y-2">
-            <h4 className="font-heading font-extrabold text-xs text-indigo-950">
-              Attended this event?
-            </h4>
-            <p className="text-[11px] text-indigo-700 max-w-[260px] mx-auto">
-              Share your feedback on content, venue, and organisation to help future students!
-            </p>
+          {/* 4 Category Ratings Breakdown Summary */}
+          {event.categoryAverages && event.reviews?.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200/60">
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-500 font-medium block">Overall Experience</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    ⭐ {event.categoryAverages.overall || event.averageRating || '—'}
+                  </span>
+                  <RatingStars value={Math.round(event.categoryAverages.overall || event.averageRating || 0)} readOnly size="xs" />
+                </div>
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-500 font-medium block">Content & Quality</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    ⭐ {event.categoryAverages.contentQuality || event.averageRating || '—'}
+                  </span>
+                  <RatingStars value={Math.round(event.categoryAverages.contentQuality || event.averageRating || 0)} readOnly size="xs" />
+                </div>
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-500 font-medium block">Presentation & Organization</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    ⭐ {event.categoryAverages.presentation || event.averageRating || '—'}
+                  </span>
+                  <RatingStars value={Math.round(event.categoryAverages.presentation || event.averageRating || 0)} readOnly size="xs" />
+                </div>
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-[10px] text-slate-500 font-medium block">Engagement & Usefulness</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    ⭐ {event.categoryAverages.engagement || event.averageRating || '—'}
+                  </span>
+                  <RatingStars value={Math.round(event.categoryAverages.engagement || event.averageRating || 0)} readOnly size="xs" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Primary Action Button: "Write a Review" / "Edit Your Review" */}
+          <div className="pt-1">
             <button
-              id="btn-write-review"
-              onClick={() => onNavigateToReview(event._id)}
-              className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-hover shadow-sm transition-all touch-scale inline-flex items-center gap-1.5"
+              id="btn-write-review-main"
+              onClick={() => setIsReviewModalOpen(true)}
+              className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all touch-scale flex items-center justify-center gap-2 shadow-sm ${
+                event.userReview
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                  : 'bg-primary hover:bg-primary-hover text-white shadow-primary/20'
+              }`}
             >
-              <Star className="w-3.5 h-3.5 fill-white" />
-              <span>Write a Review</span>
+              {event.userReview ? (
+                <>
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Your Review (Rated {event.userReview.averageRating || event.userReview.ratings?.overall || 5}★)</span>
+                </>
+              ) : (
+                <>
+                  <Star className="w-3.5 h-3.5 fill-white" />
+                  <span>Write a Review</span>
+                </>
+              )}
             </button>
           </div>
-        )}
+
+          {/* Written Reviews List */}
+          {event.reviews && event.reviews.length > 0 ? (
+            <div className="space-y-3 pt-2">
+              {event.reviews.map((r) => {
+                const isMyReview = event.userReview && (
+                  r._id?.toString() === event.userReview._id?.toString() ||
+                  r.user?._id?.toString() === event.userReview.user?._id?.toString()
+                );
+                const overallScore = r.ratings?.overall || r.averageRating || 5;
+                const reviewBody = r.reviewText || r.comment;
+
+                return (
+                  <div
+                    key={r._id}
+                    className={`p-3.5 rounded-2xl border text-xs space-y-2 transition-all ${
+                      isMyReview
+                        ? 'bg-amber-50/40 border-amber-200/90 shadow-subtle'
+                        : 'bg-slate-50 border-slate-200/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-primary/15 text-primary font-bold text-xs flex items-center justify-center border border-primary/20">
+                          {r.user?.name ? r.user.name.charAt(0).toUpperCase() : 'S'}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-900 leading-tight">
+                              {r.user?.name || 'Verified Student'}
+                            </span>
+                            {isMyReview && (
+                              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-200 text-amber-900">
+                                You
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400 block leading-tight">
+                            {r.user?.rollNumber ? `Roll: ${r.user.rollNumber}` : 'Campus Student'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-lg border border-slate-200/80 shadow-2xs">
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                          <span className="text-[11px] font-bold text-slate-800">{overallScore}/5</span>
+                        </div>
+
+                        {isMyReview && (
+                          <button
+                            onClick={() => setIsReviewModalOpen(true)}
+                            aria-label="Edit review"
+                            className="p-1 rounded-lg text-amber-700 hover:bg-amber-100 transition-colors"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Category mini ratings */}
+                    <div className="flex flex-wrap gap-1 text-[10px] text-slate-500 pt-0.5">
+                      {r.ratings?.contentQuality && (
+                        <span className="bg-white/80 px-1.5 py-0.5 rounded border border-slate-200/60">
+                          Content: {r.ratings.contentQuality}★
+                        </span>
+                      )}
+                      {r.ratings?.presentation && (
+                        <span className="bg-white/80 px-1.5 py-0.5 rounded border border-slate-200/60">
+                          Presentation: {r.ratings.presentation}★
+                        </span>
+                      )}
+                      {r.ratings?.engagement && (
+                        <span className="bg-white/80 px-1.5 py-0.5 rounded border border-slate-200/60">
+                          Engagement: {r.ratings.engagement}★
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Written Comment */}
+                    {reviewBody && (
+                      <p className="text-slate-700 text-xs leading-relaxed italic bg-white/70 p-2.5 rounded-xl border border-slate-100">
+                        "{reviewBody}"
+                      </p>
+                    )}
+
+                    {/* Suggestions */}
+                    {r.suggestions && (
+                      <div className="flex items-start gap-1.5 text-[11px] text-amber-900 bg-amber-50/80 p-2 rounded-xl border border-amber-200/60">
+                        <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold block text-[10px] text-amber-800 uppercase tracking-wider">
+                            Suggestion for Improvement
+                          </span>
+                          <p className="text-[11px] leading-relaxed">
+                            {r.suggestions}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-6 text-center space-y-2 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-500 mx-auto flex items-center justify-center">
+                <Star className="w-5 h-5 fill-amber-400" />
+              </div>
+              <p className="text-xs font-bold text-slate-800">No reviews yet</p>
+              <p className="text-[11px] text-slate-500 max-w-[220px] mx-auto">
+                Be the first student to review this event and share your thoughts!
+              </p>
+              <button
+                onClick={() => setIsReviewModalOpen(true)}
+                className="px-3.5 py-1.5 bg-primary text-white text-[11px] font-bold rounded-lg hover:bg-primary-hover shadow-xs transition-all touch-scale"
+              >
+                + Write First Review
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Review Modal */}
+        <EventReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          event={event}
+          existingReview={event.userReview}
+          onReviewSubmitted={handleReviewSubmitted}
+        />
       </div>
 
       {/* Fixed Bottom Action Floating Bar */}

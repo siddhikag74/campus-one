@@ -8,8 +8,72 @@ const ImportantEvent = require('../models/ImportantEvent');
 const Review = require('../models/Review');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth');
-const { authorizeRoles } = require('../middleware/auth');
+const { authorizeRoles, optionalAuth } = require('../middleware/auth');
 const { sendWhatsAppNotification } = require('../integrations/meta/whatsapp');
+
+// Helper to calculate review stats, category averages, and rating breakdown
+const calculateReviewStats = (reviews = [], currentUserId = null) => {
+  if (!reviews || reviews.length === 0) {
+    return {
+      averageRating: 0,
+      reviewCount: 0,
+      categoryAverages: {
+        overall: 0,
+        contentQuality: 0,
+        presentation: 0,
+        engagement: 0,
+      },
+      ratingBreakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+      userReview: null,
+    };
+  }
+
+  let totalOverall = 0;
+  let totalContent = 0;
+  let totalPresentation = 0;
+  let totalEngagement = 0;
+  const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  let userReview = null;
+
+  reviews.forEach((r) => {
+    const overall = Number(r.ratings?.overall) || 5;
+    const content = Number(r.ratings?.contentQuality ?? r.ratings?.content) || overall;
+    const presentation = Number(r.ratings?.presentation ?? r.ratings?.organisation) || overall;
+    const engagement = Number(r.ratings?.engagement ?? r.ratings?.venue) || overall;
+
+    totalOverall += overall;
+    totalContent += content;
+    totalPresentation += presentation;
+    totalEngagement += engagement;
+
+    const rounded = Math.max(1, Math.min(5, Math.round(overall)));
+    breakdown[rounded] = (breakdown[rounded] || 0) + 1;
+
+    if (
+      currentUserId &&
+      (r.user?._id?.toString() === currentUserId.toString() ||
+        r.user?.toString() === currentUserId.toString())
+    ) {
+      userReview = r;
+    }
+  });
+
+  const count = reviews.length;
+  const averageRating = Number((totalOverall / count).toFixed(1));
+
+  return {
+    averageRating,
+    reviewCount: count,
+    categoryAverages: {
+      overall: Number((totalOverall / count).toFixed(1)),
+      contentQuality: Number((totalContent / count).toFixed(1)),
+      presentation: Number((totalPresentation / count).toFixed(1)),
+      engagement: Number((totalEngagement / count).toFixed(1)),
+    },
+    ratingBreakdown: breakdown,
+    userReview,
+  };
+};
 
 // Helper to attach user-specific states to an array of events
 const attachUserStates = async (events, userId) => {
@@ -140,18 +204,17 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
     obj.isSaved = !!saved;
     obj.isRegistered = !!registered;
     obj.isImportant = !!important;
-    obj.reviews = reviews;
     obj.registrationDetails = registered || null;
 
-    // Calculate rating averages if reviews exist
-    if (reviews.length > 0) {
-      const sum = reviews.reduce((acc, r) => acc + (r.ratings?.overall || 0), 0);
-      obj.averageRating = Number((sum / reviews.length).toFixed(1));
-      obj.reviewCount = reviews.length;
-    } else {
-      obj.averageRating = null;
-      obj.reviewCount = 0;
-    }
+    // Calculate rating averages and category breakdown
+    const stats = calculateReviewStats(reviews, userId);
+    obj.reviews = reviews;
+    obj.reviewStats = stats;
+    obj.averageRating = stats.averageRating > 0 ? stats.averageRating : null;
+    obj.reviewCount = stats.reviewCount;
+    obj.categoryAverages = stats.categoryAverages;
+    obj.ratingBreakdown = stats.ratingBreakdown;
+    obj.userReview = stats.userReview;
 
     return res.json({
       success: true,
@@ -337,7 +400,7 @@ router.delete('/:id/important', authMiddleware, async (req, res, next) => {
 });
 
 // POST /api/events/:id/reviews
-// Strictly permitted ONLY when event.status === 'missed'
+// Submit or update a review with 4 criteria ratings, review text, and suggestions
 router.post('/:id/reviews', authMiddleware, async (req, res, next) => {
   try {
     const event = await Event.findById(req.params.id);
@@ -345,60 +408,104 @@ router.post('/:id/reviews', authMiddleware, async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
 
-    if (event.status !== 'missed') {
+    const userId = req.user._id;
+    const { ratings, reviewText, comment, suggestions } = req.body;
+
+    if (!ratings) {
       return res.status(400).json({
         success: false,
-        message: 'Reviews can only be submitted for completed/missed events.',
+        message: 'Ratings are required for all 4 categories.',
       });
     }
 
-    const userId = req.user._id;
-    const existing = await Review.findOne({ user: userId, event: event._id });
-    if (existing) {
-      return res.status(409).json({
-        success: false,
-        message: 'You have already submitted a review for this event.',
-      });
-    }
-
-    const { ratings, comment } = req.body;
+    const overall = Number(ratings.overall);
+    const contentQuality = Number(ratings.contentQuality ?? ratings.content);
+    const presentation = Number(ratings.presentation ?? ratings.organisation);
+    const engagement = Number(ratings.engagement ?? ratings.venue);
 
     if (
-      !ratings ||
-      !ratings.content ||
-      !ratings.organisation ||
-      !ratings.venue ||
-      !ratings.overall
+      !overall || overall < 1 || overall > 5 ||
+      !contentQuality || contentQuality < 1 || contentQuality > 5 ||
+      !presentation || presentation < 1 || presentation > 5 ||
+      !engagement || engagement < 1 || engagement > 5
     ) {
       return res.status(400).json({
         success: false,
-        message: 'All 4 ratings (Content, Organisation, Venue, Overall) are mandatory.',
+        message: 'All 4 ratings (Overall Experience, Content & Quality, Presentation & Organization, Engagement & Usefulness) must be between 1 and 5 stars.',
       });
     }
 
-    if (comment && comment.length > 500) {
+    const text = (reviewText ?? comment ?? '').trim();
+    const sugg = (suggestions ?? '').trim();
+
+    if (text.length > 1000) {
       return res.status(400).json({
         success: false,
-        message: 'Review comments cannot exceed 500 characters.',
+        message: 'Review text cannot exceed 1000 characters.',
       });
     }
 
-    const review = await Review.create({
-      user: userId,
-      event: event._id,
-      ratings: {
-        content: Number(ratings.content),
-        organisation: Number(ratings.organisation),
-        venue: Number(ratings.venue),
-        overall: Number(ratings.overall),
-      },
-      comment: (comment || '').trim(),
-    });
+    if (sugg.length > 500) {
+      return res.status(400).json({
+        success: false,
+        message: 'Suggestions cannot exceed 500 characters.',
+      });
+    }
 
-    return res.status(201).json({
+    const avgRating = Number(((overall + contentQuality + presentation + engagement) / 4).toFixed(1));
+
+    // Check for existing review to update or prevent duplicate
+    let review = await Review.findOne({ user: userId, event: event._id });
+    let isUpdate = false;
+
+    if (review) {
+      isUpdate = true;
+      review.ratings = {
+        overall,
+        contentQuality,
+        presentation,
+        engagement,
+        content: contentQuality,
+        organisation: presentation,
+        venue: engagement,
+      };
+      review.averageRating = avgRating;
+      review.reviewText = text;
+      review.comment = text;
+      review.suggestions = sugg;
+      await review.save();
+    } else {
+      review = await Review.create({
+        user: userId,
+        event: event._id,
+        ratings: {
+          overall,
+          contentQuality,
+          presentation,
+          engagement,
+          content: contentQuality,
+          organisation: presentation,
+          venue: engagement,
+        },
+        averageRating: avgRating,
+        reviewText: text,
+        comment: text,
+        suggestions: sugg,
+      });
+    }
+
+    await review.populate('user', 'name rollNumber avatar role');
+
+    // Fetch updated stats
+    const allReviews = await Review.find({ event: event._id }).populate('user', 'name rollNumber avatar role');
+    const stats = calculateReviewStats(allReviews, userId);
+
+    return res.status(isUpdate ? 200 : 201).json({
       success: true,
-      message: 'Review Submitted!',
+      message: isUpdate ? 'Review updated successfully! ⭐' : 'Review submitted successfully! ⭐',
+      isUpdate,
       review,
+      stats,
     });
   } catch (error) {
     next(error);
@@ -406,16 +513,21 @@ router.post('/:id/reviews', authMiddleware, async (req, res, next) => {
 });
 
 // GET /api/events/:id/reviews
-router.get('/:id/reviews', async (req, res, next) => {
+// Retrieve all reviews, stats breakdown, and current user's review
+router.get('/:id/reviews', optionalAuth, async (req, res, next) => {
   try {
     const reviews = await Review.find({ event: req.params.id })
-      .populate('user', 'name rollNumber avatar')
+      .populate('user', 'name rollNumber avatar role')
       .sort('-createdAt');
+
+    const stats = calculateReviewStats(reviews, req.user?._id);
 
     return res.json({
       success: true,
       count: reviews.length,
       reviews,
+      stats,
+      userReview: stats.userReview,
     });
   } catch (error) {
     next(error);

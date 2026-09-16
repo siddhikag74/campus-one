@@ -225,6 +225,13 @@ export const api = {
     return handleResponse(res);
   },
 
+  getEventReviews: async (id) => {
+    const res = await fetch(`${API_BASE}/events/${id}/reviews`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   // Clubs
   getClubs: async () => {
     const res = await fetch(`${API_BASE}/clubs`, {

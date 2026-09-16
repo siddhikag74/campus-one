@@ -62,7 +62,29 @@ const authorizeRoles = (...roles) => {
   };
 };
 
+const optionalAuth = async (req, res, next) => {
+  try {
+    let token = null;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'campusone_super_secure_jwt_secret_token_2026');
+        const user = await User.findById(decoded.id).select('-password');
+        if (user) req.user = user;
+      } catch (e) {
+        // Proceed as unauthenticated
+      }
+    }
+    next();
+  } catch (err) {
+    next();
+  }
+};
+
 module.exports = authMiddleware;
 module.exports.authMiddleware = authMiddleware;
 module.exports.authorizeRoles = authorizeRoles;
+module.exports.optionalAuth = optionalAuth;
 
