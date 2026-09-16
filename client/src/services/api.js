@@ -307,6 +307,22 @@ export const api = {
     return handleResponse(res);
   },
 
+  getProfileInterests: async () => {
+    const res = await fetch(`${API_BASE}/profile/interests`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  updateProfileInterests: async ({ interests, interestSubCategories }) => {
+    const res = await fetch(`${API_BASE}/profile/interests`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ interests, interestSubCategories }),
+    });
+    return handleResponse(res);
+  },
+
   updateProfile: async (payload) => {
     const res = await fetch(`${API_BASE}/profile`, {
       method: 'PUT',

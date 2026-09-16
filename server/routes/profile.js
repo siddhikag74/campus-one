@@ -111,15 +111,86 @@ router.get('/', authMiddleware, async (req, res, next) => {
   }
 });
 
+// GET /api/profile/interests
+// Fetch currently authenticated user's saved interests
+router.get('/interests', authMiddleware, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('interests interestSubCategories onboardingCompleted');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    return res.json({
+      success: true,
+      interests: user.interests || [],
+      interestSubCategories: user.interestSubCategories || [],
+      onboardingCompleted: !!user.onboardingCompleted,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/profile/interests (and PUT /api/profile/interests)
+// Update currently authenticated user's saved interests & subcategories
+const handleUpdateInterests = async (req, res, next) => {
+  try {
+    const { interests, interestSubCategories } = req.body;
+
+    if (!interests || !Array.isArray(interests)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Interests must be an array of selected categories.',
+      });
+    }
+
+    const cleanedInterests = interests.map(i => String(i).trim()).filter(Boolean);
+    const cleanedSubCategories = Array.isArray(interestSubCategories)
+      ? interestSubCategories.map(s => String(s).trim()).filter(Boolean)
+      : [];
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: {
+          interests: cleanedInterests,
+          interestSubCategories: cleanedSubCategories,
+          onboardingCompleted: true,
+        },
+      },
+      { new: true }
+    ).select('-password');
+
+    return res.json({
+      success: true,
+      message: 'Your interests have been updated.',
+      user: updatedUser,
+      interests: updatedUser.interests || [],
+      interestSubCategories: updatedUser.interestSubCategories || [],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+router.patch('/interests', authMiddleware, handleUpdateInterests);
+router.put('/interests', authMiddleware, handleUpdateInterests);
+
 // PUT /api/profile
 router.put('/', authMiddleware, async (req, res, next) => {
   try {
-    const { name, phone, branch, year } = req.body;
+    const { name, phone, branch, year, interests, interestSubCategories } = req.body;
     const updates = {};
     if (name) updates.name = name.trim();
     if (phone) updates.phone = phone.trim();
     if (branch) updates.branch = branch.trim();
     if (year) updates.year = year.trim();
+    if (interests && Array.isArray(interests)) {
+      updates.interests = interests.map(i => String(i).trim()).filter(Boolean);
+    }
+    if (interestSubCategories && Array.isArray(interestSubCategories)) {
+      updates.interestSubCategories = interestSubCategories.map(s => String(s).trim()).filter(Boolean);
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
@@ -138,3 +209,4 @@ router.put('/', authMiddleware, async (req, res, next) => {
 });
 
 module.exports = router;
+

@@ -15,6 +15,9 @@ import {
   X,
   LogOut,
   Mail,
+  Sparkles,
+  Sliders,
+  Layers,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +26,8 @@ import EventCard from '../components/events/EventCard';
 import EventGrid from '../components/events/EventGrid';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import EmptyState from '../components/common/EmptyState';
+import CustomizeInterestsModal from '../components/profile/CustomizeInterestsModal';
+import { MAIN_INTERESTS } from '../constants/interests';
 
 export const ProfileScreen = ({ onNavigateToEvent }) => {
   const { user: authUser, updateProfile, logout } = useAuth();
@@ -34,6 +39,7 @@ export const ProfileScreen = ({ onNavigateToEvent }) => {
 
   // Edit Profile Modal state
   const [isEditing, setIsEditing] = useState(false);
+  const [isCustomizeInterestsOpen, setIsCustomizeInterestsOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     name: '',
     phone: '',
@@ -438,6 +444,71 @@ export const ProfileScreen = ({ onNavigateToEvent }) => {
         </div>
       )}
 
+      {/* Interests & Preferences Personalization Card */}
+      <div className="bg-surface rounded-2xl p-4 border border-slate-200/80 shadow-subtle space-y-3 mt-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-800 font-heading">
+                Interests & Feed Personalization
+              </h4>
+              <p className="text-[10px] text-slate-500">
+                Tailors recommendations and feed categories to your campus passions
+              </p>
+            </div>
+          </div>
+
+          <button
+            id="btn-customize-interests"
+            onClick={() => setIsCustomizeInterestsOpen(true)}
+            className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors touch-scale"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Customize</span>
+          </button>
+        </div>
+
+        {/* Selected Interests Chips */}
+        {student?.interests && student.interests.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {student.interests.map((interestName) => {
+              const matched = MAIN_INTERESTS.find((m) => m.name.toLowerCase() === interestName.toLowerCase() || m.id.toLowerCase() === interestName.toLowerCase());
+              const emoji = matched?.emoji || '⭐';
+
+              return (
+                <span
+                  key={interestName}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-700 shadow-2xs"
+                >
+                  <span>{emoji}</span>
+                  <span>{interestName}</span>
+                </span>
+              );
+            })}
+            {student?.interestSubCategories && student.interestSubCategories.length > 0 && (
+              student.interestSubCategories.map((subName) => (
+                <span
+                  key={subName}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-lg bg-fuchsia-50 border border-fuchsia-200 text-fuchsia-800"
+                >
+                  <span>🎨</span>
+                  <span>{subName}</span>
+                </span>
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center">
+            <p className="text-xs text-slate-500">
+              No interests selected yet. Tap Customize to personalize your campus feed!
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Account Settings & Sign Out Card */}
       <div className="bg-surface rounded-2xl p-4 border border-slate-200/80 space-y-3 mt-4">
         <div className="flex items-center justify-between">
@@ -543,6 +614,16 @@ export const ProfileScreen = ({ onNavigateToEvent }) => {
           </div>
         </div>
       )}
+
+      {/* CUSTOMIZE INTERESTS MODAL */}
+      <CustomizeInterestsModal
+        isOpen={isCustomizeInterestsOpen}
+        onClose={() => setIsCustomizeInterestsOpen(false)}
+        onUpdated={(updated) => {
+          fetchProfile();
+          refreshGlobalData();
+        }}
+      />
     </div>
   );
 };
