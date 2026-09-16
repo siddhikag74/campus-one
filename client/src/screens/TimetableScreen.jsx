@@ -26,6 +26,47 @@ import EmptyState from '../components/common/EmptyState';
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+// Helper to convert time string to minutes
+const parseTimeToMinutes = (timeStr) => {
+  if (!timeStr) return null;
+  const str = timeStr.trim().toUpperCase();
+  const isPM = str.includes('PM');
+  const isAM = str.includes('AM');
+  const cleanStr = str.replace(/AM|PM/g, '').trim();
+  const parts = cleanStr.split(':');
+  if (parts.length < 2) return null;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(minutes)) return null;
+  if (isPM && hours < 12) hours += 12;
+  if (isAM && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+// Check if two time slots overlap
+const doTimeSlotsOverlap = (start1Str, end1Str, start2Str, end2Str) => {
+  const s1 = parseTimeToMinutes(start1Str);
+  let e1 = parseTimeToMinutes(end1Str);
+  const s2 = parseTimeToMinutes(start2Str);
+  let e2 = parseTimeToMinutes(end2Str);
+  if (s1 === null || e1 === null || s2 === null || e2 === null) return false;
+  if (e1 <= s1) e1 += 60;
+  if (e2 <= s2) e2 += 60;
+  return Math.max(s1, s2) < Math.min(e1, e2);
+};
+
+// Deduplicate array of classes so each class only appears once
+const deduplicateClasses = (classList = []) => {
+  const seen = new Set();
+  return classList.filter((cls) => {
+    if (!cls) return false;
+    const key = `${cls.courseCode}_${cls.dayOfWeek}_${cls.startTime}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export const TimetableScreen = ({ highlightedClassId }) => {
   const { showToast } = useToast();
   const { refreshGlobalData } = useAppData();
@@ -60,9 +101,16 @@ export const TimetableScreen = ({ highlightedClassId }) => {
         api.getTimetableChanges(),
       ]);
 
+      // Deduplicate classes on all days
+      if (weekRes?.days) {
+        Object.keys(weekRes.days).forEach((d) => {
+          weekRes.days[d] = deduplicateClasses(weekRes.days[d]);
+        });
+      }
+
       setWeekData(weekRes);
-      setTodayClasses(todayRes.classes || []);
-      setRecentChanges(changesRes.changes || []);
+      setTodayClasses(deduplicateClasses(todayRes.classes || []));
+      setRecentChanges(deduplicateClasses(changesRes.changes || []));
 
       if (weekRes.metadata?.currentDay) {
         setSelectedDay((prev) => (weekOffset === 0 ? weekRes.metadata.currentDay : prev));
@@ -98,6 +146,29 @@ export const TimetableScreen = ({ highlightedClassId }) => {
     e.preventDefault();
     if (!simulatingClass) return;
 
+    // Client-side time clash validation
+    if (simAction === 'postpone' || simAction === 'time_change') {
+      const targetDay = (simAction === 'postpone' ? simPayload.newDay : null) || simulatingClass.dayOfWeek;
+      const targetStartTime = simPayload.newStartTime || simulatingClass.startTime;
+      const targetEndTime = simPayload.newEndTime || simulatingClass.endTime;
+
+      const targetDayClasses = weekData?.days?.[targetDay] || [];
+      const conflictingClass = targetDayClasses.find(
+        (cls) =>
+          cls._id !== simulatingClass._id &&
+          cls.status !== 'cancelled' &&
+          doTimeSlotsOverlap(targetStartTime, targetEndTime, cls.startTime, cls.endTime)
+      );
+
+      if (conflictingClass) {
+        showToast(
+          `Time clash: '${conflictingClass.subject}' (${conflictingClass.courseCode}) is already scheduled on ${targetDay} from ${conflictingClass.startTime} to ${conflictingClass.endTime}.`,
+          'warning'
+        );
+        return;
+      }
+    }
+
     try {
       setSubmittingChange(true);
       const res = await api.changeTimetableSchedule(simulatingClass._id, {
@@ -116,6 +187,7 @@ export const TimetableScreen = ({ highlightedClassId }) => {
       setSubmittingChange(false);
     }
   };
+
 
   const handleResetDemo = async () => {
     try {

@@ -5,6 +5,47 @@ import { api } from '../../services/api';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+// Helper to convert time string to minutes
+const parseTimeToMinutes = (timeStr) => {
+  if (!timeStr) return null;
+  const str = timeStr.trim().toUpperCase();
+  const isPM = str.includes('PM');
+  const isAM = str.includes('AM');
+  const cleanStr = str.replace(/AM|PM/g, '').trim();
+  const parts = cleanStr.split(':');
+  if (parts.length < 2) return null;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(minutes)) return null;
+  if (isPM && hours < 12) hours += 12;
+  if (isAM && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+// Check if two time slots overlap
+const doTimeSlotsOverlap = (start1Str, end1Str, start2Str, end2Str) => {
+  const s1 = parseTimeToMinutes(start1Str);
+  let e1 = parseTimeToMinutes(end1Str);
+  const s2 = parseTimeToMinutes(start2Str);
+  let e2 = parseTimeToMinutes(end2Str);
+  if (s1 === null || e1 === null || s2 === null || e2 === null) return false;
+  if (e1 <= s1) e1 += 60;
+  if (e2 <= s2) e2 += 60;
+  return Math.max(s1, s2) < Math.min(e1, e2);
+};
+
+// Deduplicate array of classes so each class only appears once
+const deduplicateClasses = (classList = []) => {
+  const seen = new Set();
+  return classList.filter((cls) => {
+    if (!cls) return false;
+    const key = `${cls.courseCode}_${cls.dayOfWeek}_${cls.startTime}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export const ProfessorScheduleScreen = () => {
   const { user, logout } = useAuth();
   const { showToast } = useToast();
@@ -27,6 +68,11 @@ export const ProfessorScheduleScreen = () => {
     try {
       setLoading(true);
       const data = await api.getWeekTimetable(0);
+      if (data?.days) {
+        Object.keys(data.days).forEach((d) => {
+          data.days[d] = deduplicateClasses(data.days[d]);
+        });
+      }
       setTimetableData(data);
     } catch (err) {
       showToast(err.message || 'Failed to fetch timetable', 'error');
@@ -53,6 +99,29 @@ export const ProfessorScheduleScreen = () => {
     e.preventDefault();
     if (!selectedClass) return;
 
+    // Client-side time clash validation
+    if (actionType === 'postpone' || actionType === 'time_change') {
+      const targetDay = (actionType === 'postpone' ? newDay : null) || selectedClass.dayOfWeek;
+      const targetStartTime = newStartTime || selectedClass.startTime;
+      const targetEndTime = newEndTime || selectedClass.endTime;
+
+      const targetDayClasses = timetableData?.days?.[targetDay] || [];
+      const conflictingClass = targetDayClasses.find(
+        (cls) =>
+          cls._id !== selectedClass._id &&
+          cls.status !== 'cancelled' &&
+          doTimeSlotsOverlap(targetStartTime, targetEndTime, cls.startTime, cls.endTime)
+      );
+
+      if (conflictingClass) {
+        showToast(
+          `Time clash: '${conflictingClass.subject}' (${conflictingClass.courseCode}) is already scheduled on ${targetDay} from ${conflictingClass.startTime} to ${conflictingClass.endTime}.`,
+          'warning'
+        );
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
       const payload = {
@@ -74,6 +143,7 @@ export const ProfessorScheduleScreen = () => {
       setSubmitting(false);
     }
   };
+
 
   const getStatusBadge = (status) => {
     switch (status) {

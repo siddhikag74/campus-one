@@ -258,9 +258,9 @@ async function runTests() {
       body: {
         action: 'postpone',
         newDay: 'Friday',
-        newStartTime: '03:00 PM',
-        newEndTime: '04:00 PM',
-        reason: 'Postponed to Friday for departmental faculty meeting.',
+        newStartTime: '04:30 PM',
+        newEndTime: '05:30 PM',
+        reason: 'Postponed to Friday afternoon for departmental faculty meeting.',
       },
     });
 

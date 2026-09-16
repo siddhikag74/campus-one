@@ -1063,7 +1063,7 @@ const seedAll = async () => {
         colorTag: 'violet',
       },
 
-      // THURSDAY
+      // THURSDAY (2 non-overlapping classes)
       {
         user: demoUser._id,
         subject: 'Design & Analysis of Algorithms',
@@ -1092,20 +1092,6 @@ const seedAll = async () => {
         originalEndTime: '11:00 AM',
         changeReason: 'Class time moved to 12:00 PM for combined session with M.Tech AI cohort.',
         colorTag: 'sky',
-      },
-      {
-        user: demoUser._id,
-        subject: 'Computer Networks [Rescheduled]',
-        courseCode: 'CS401',
-        faculty: 'Prof. Kapoor',
-        venue: 'Room B-301',
-        dayOfWeek: 'Thursday',
-        startTime: '02:00 PM',
-        endTime: '03:00 PM',
-        type: 'Lecture',
-        status: 'scheduled',
-        changeReason: 'Rescheduled session from Wednesday.',
-        colorTag: 'violet',
       },
 
       // FRIDAY
@@ -1165,6 +1151,12 @@ const seedAll = async () => {
       },
     ];
 
+    // Clean up any legacy duplicate entries for demoUser
+    await TimetableEntry.deleteMany({
+      user: demoUser._id,
+      subject: /\[Rescheduled\]/i,
+    });
+
     const savedTimetableMap = {};
     for (const item of demoTimetable) {
       const saved = await TimetableEntry.findOneAndUpdate(
@@ -1178,6 +1170,7 @@ const seedAll = async () => {
     // Insert/upsert active schedule change notifications for Arjun
     const dbmsEntry = savedTimetableMap['CS305_Monday'];
     const osEntry = savedTimetableMap['CS301_Tuesday'];
+
     const cnEntry = savedTimetableMap['CS401_Wednesday'];
     const aiEntry = savedTimetableMap['CS405_Thursday'];
 
